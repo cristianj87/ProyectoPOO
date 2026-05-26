@@ -1,0 +1,398 @@
+---------------------Estructura-------------
+
+Paquetes: conector, conexion, controlador, img, modelo, vista
+
+conector: mysql-connector-j-9.7.0.jar
+
+conexion: Conexion.java
+
+controlador: Ctrl_Usuario.java
+
+img: imágenes a utilizar (iconos)
+
+modelo: Usuario.java
+
+Vista: Frmreglog.java
+
+Libraries: mysql-connector-j-9.7.0.jar
+
+
+
+
+
+---------------------Usuario.java----------------------------------
+
+package modelo;
+
+/**
+ *
+ * @author Admin
+ */
+public class Usuario {
+
+    private int idusuario;
+    private String nombre;
+    private String apellidos;
+    private String nickname;
+    private String password;
+
+    public Usuario() {
+        this.idusuario = 0;
+        this.nombre = "";
+        this.apellidos = "";
+        this.nickname = "";
+        this.password = "";
+    }
+
+    //get y set
+    public int getIdusuario() {
+        return idusuario;
+    }
+
+    public void setIdusuario(int idusuario) {
+        this.idusuario = idusuario;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public void setNombre(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public String getApellidos() {
+        return apellidos;
+    }
+
+    public void setApellidos(String apellidos) {
+        this.apellidos = apellidos;
+    }
+
+    public String getNickname() {
+        return nickname;
+    }
+
+    public void setNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+}
+
+
+
+------------------------------------------Conexion.java-----------------------------------
+
+package conexion;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+/**
+ *
+ * @author Admin
+ */
+public class Conexion {
+
+    //Conexion local
+    public static Connection conectar() {
+        try {
+            Connection cn = DriverManager.getConnection("jdbc:mysql://localhost/sistemainventario", "root", "");
+            return cn;
+        } catch (SQLException e) {
+            System.out.println("Error en la conexion local" + e);
+
+        }
+        return null;
+    }
+
+}
+
+
+
+
+
+---------------------------------------Ctrl_Usuario----------------------------------------
+
+package controlador;
+
+import conexion.Conexion;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import javax.swing.JOptionPane;
+import modelo.Usuario;
+
+public class Ctrl_Usuario {
+
+    // LOGIN
+    public boolean loginUser(Usuario objeto) {
+
+        boolean respuesta = false;
+
+        Connection cn = Conexion.conectar();
+
+        String sql = "select nickname, password "
+                + "from usuarios "
+                + "where nickname = '"
+                + objeto.getNickname()
+                + "' and password = '"
+                + md5(objeto.getPassword())
+                + "'";
+
+        Statement st;
+
+        try {
+
+            st = cn.createStatement();
+
+            ResultSet rs = st.executeQuery(sql);
+
+            while (rs.next()) {
+                respuesta = true;
+            }
+
+        } catch (SQLException e) {
+
+            System.out.println("Error al iniciar sesión");
+            JOptionPane.showMessageDialog(null,
+                    "Error al iniciar sesión");
+
+        }
+
+        return respuesta;
+    }
+
+    // REGISTRAR USUARIO
+    public boolean registrarUsuario(Usuario objeto) {
+
+        boolean respuesta = false;
+
+        Connection cn = Conexion.conectar();
+
+        try {
+
+            Statement st = cn.createStatement();
+
+            String sql = "insert into usuarios "
+                    + "(nombre, apellidos, nickname, password) values ('"
+                    + objeto.getNombre() + "','"
+                    + objeto.getApellidos() + "','"
+                    + objeto.getNickname() + "','"
+                    + md5(objeto.getPassword()) + "')";
+
+            st.executeUpdate(sql);
+
+            respuesta = true;
+
+        } catch (SQLException e) {
+
+            System.out.println("Error al registrar usuario");
+            JOptionPane.showMessageDialog(null,
+                    "Error al registrar usuario");
+
+        }
+
+        return respuesta;
+    }
+
+    // CIFRADO MD5
+    public String md5(String texto) {
+
+        try {
+
+            MessageDigest md =
+                    MessageDigest.getInstance("MD5");
+
+            byte[] mensaje =
+                    md.digest(texto.getBytes());
+
+            StringBuilder sb =
+                    new StringBuilder();
+
+            for (byte b : mensaje) {
+
+                sb.append(
+                        String.format("%02x", b)
+                );
+            }
+
+            return sb.toString();
+
+        } catch (NoSuchAlgorithmException e) {
+
+            return null;
+        }
+    }
+}
+
+
+
+
+
+-----------------------------ventana Formulario.java---------------------------------
+
+import controlador.Ctrl_Usuario;
+import javax.swing.JOptionPane;
+import modelo.Usuario;
+import java.awt.Dimension;
+
+/**
+ *
+ * @author Admin
+ */
+public class Frmreglog extends javax.swing.JFrame {
+    
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(Frmreglog.class.getName());
+
+    /**
+     * Creates new form Frmreglog
+     */
+    public Frmreglog() {
+        initComponents();
+        this.setResizable(false);
+        this.setLocationRelativeTo(null);
+        this.setTitle("SistemTech    Resgistro-Login");
+        this.setSize(new Dimension(700, 500));
+
+    }
+
+private void Login() {
+        if (!txt_usuario.getText().isEmpty() && !txt_password.getText().isEmpty()) {
+            Ctrl_Usuario controlUsuario = new Ctrl_Usuario();
+            Usuario usuario = new Usuario();
+            usuario.setNickname(txt_usuario.getText().trim());
+            usuario.setPassword(txt_password.getText().trim());
+            if (controlUsuario.loginUser(usuario)) {
+                JOptionPane.showMessageDialog(null, "Login Correcto");
+            } else {
+                JOptionPane.showMessageDialog(null, "Usuario o Clave incorrecta");
+            }
+        } else {
+            JOptionPane.showMessageDialog(null, "Ingrese sus credenciales");
+        }
+    }
+    
+    
+    private void RegistrarUsuario() {
+
+        if (!txt_nombre.getText().isEmpty()
+                && !txt_apellidos.getText().isEmpty()
+                && !txt_nickname.getText().isEmpty()
+                && !txt_password_registro.getText().isEmpty()) {
+
+            Usuario usuario = new Usuario();
+
+            usuario.setNombre(
+                    txt_nombre.getText().trim());
+
+            usuario.setApellidos(
+                    txt_apellidos.getText().trim());
+
+            usuario.setNickname(
+                    txt_nickname.getText().trim());
+
+            usuario.setPassword(
+                    txt_password_registro.getText().trim());
+
+            Ctrl_Usuario controlUsuario
+                    = new Ctrl_Usuario();
+
+            if (controlUsuario.registrarUsuario(usuario)) {
+
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Usuario registrado correctamente"
+                );
+
+                limpiar();
+
+            } else {
+
+                JOptionPane.showMessageDialog(
+                        null,
+                        "Error al registrar usuario"
+                );
+            }
+
+        } else {
+
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Complete todos los campos"
+            );
+        }
+    }
+    
+    private void limpiar() {
+
+        txt_nombre.setText("");
+        txt_apellidos.setText("");
+        txt_nickname.setText("");
+        txt_password_registro.setText("");
+
+    }
+}
+
+
+
+
+
+---------------------------------btn_registrar---------------------------------------------
+
+private void btn_registrarActionPerformed(java.awt.event.ActionEvent evt) {                                              
+        this.RegistrarUsuario();
+    } 
+
+
+
+
+
+---------------------------------btn_iniciarsesion-------------------------------------------
+
+private void btn_iniciarsesionActionPerformed(java.awt.event.ActionEvent evt) {                                                  
+        this.Login();
+    } 
+
+
+
+
+
+
+
+
+----------------------------------Variables texto y botones---------------------------------
+
+// Variables declaration - do not modify                     
+    private javax.swing.JButton btn_iniciarsesion;
+    private javax.swing.JButton btn_registrar;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel4;
+    private javax.swing.JLabel jLabel5;
+    private javax.swing.JLabel jLabel6;
+    private javax.swing.JLabel jLabel7;
+    private javax.swing.JLabel jLabel8;
+    private javax.swing.JLabel jLabel9;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JPanel jPanel3;
+    private javax.swing.JTextField txt_apellidos;
+    private javax.swing.JTextField txt_nickname;
+    private javax.swing.JTextField txt_nombre;
+    private javax.swing.JPasswordField txt_password;
+    private javax.swing.JPasswordField txt_password_registro;
+    private javax.swing.JTextField txt_usuario;
