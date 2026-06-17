@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard SisTech</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { display: flex; height: 100vh; background-color: #f4f6f9; color: #333; }
+
+        /* MENÚ LATERAL */
+        .sidebar { width: 260px; background-color: #2c3e50; color: white; display: flex; flex-direction: column; padding: 20px 0; }
+        .sidebar-logo { text-align: center; font-size: 26px; font-weight: bold; margin-bottom: 30px; color: #00d2d3; }
+        .menu-btn { background: none; border: none; color: #bdc3c7; padding: 15px 25px; text-align: left; font-size: 16px; cursor: pointer; transition: 0.3s; width: 100%; display: flex; align-items: center; gap: 10px; }
+        .menu-btn:hover, .menu-btn.activo { background-color: #34495e; color: white; border-left: 4px solid #00d2d3; }
+        .btn-cerrar { margin-top: auto; color: #e74c3c; }
+        .btn-cerrar:hover { background-color: #c0392b; color: white; border-left-color: #e74c3c; }
+
+        /* ÁREA PRINCIPAL */
+        .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .header { background-color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); z-index: 10; }
+        .header h1 { font-size: 22px; color: #2c3e50; }
+        .user-info { font-size: 16px; color: #7f8c8d; font-weight: 500; }
+        .user-info strong { color: #00d2d3; }
+
+        .content-area { padding: 30px; flex: 1; overflow-y: auto; }
+        
+        /* CONTROL DE VISTAS (SPA) */
+        .vista-modulo { display: none; /* Oculto por defecto */ animation: fadeIn 0.3s ease; }
+        .vista-modulo.activa { display: block; /* Solo se muestra la activa */ }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* DISEÑO DE GRÁFICAS */
+        .grid-graficas { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+        .tarjeta-grafica { 
+            background: white; padding: 20px; border-radius: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
+            height: 300px; /* ALTURA ESTRICTA OBLIGATORIA */
+            display: flex; flex-direction: column;
+        }
+        .tarjeta-grafica h3 { margin-bottom: 15px; color: #34495e; font-size: 16px; text-align: center; }
+        .tarjeta-grafica div { flex: 1; position: relative; } /* Contenedor dinámico para el canvas */
+        /* UTILIDAD */
+        .tarjeta-blanca { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); text-align: center; }
+        
+        /* ESTILOS PARA EL TICKET DE IMPRESIÓN */
+        .modal-ticket {
+            display: none; /* Oculto por defecto */
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); z-index: 1000;
+            justify-content: center; align-items: center;
+        }
+        .ticket-papel {
+            background: white; padding: 30px; width: 350px; 
+            font-family: 'Courier New', Courier, monospace; /* Fuente clásica de ticket */
+            color: black; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        /* MAGIA: Esto controla lo que sale en la impresora física */
+        @media print {
+            body * { visibility: hidden; } /* Oculta toda la app */
+            #ticket-contenido, #ticket-contenido * { visibility: visible; } /* Muestra solo el ticket */
+            #ticket-contenido { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="modal-ticket" class="modal-ticket">
+        <div>
+            <div style="text-align: right; margin-bottom: 10px;">
+                <button onclick="imprimirTicketFisico()" style="background-color: #3498db; color: white; padding: 8px 15px; border: none; cursor: pointer; margin-right: 10px;">🖨️ Imprimir</button>
+                <button onclick="cerrarTicket()" style="background-color: #e74c3c; color: white; padding: 8px 15px; border: none; cursor: pointer;">❌ Cerrar</button>
+            </div>
+            
+            <div id="ticket-contenido" class="ticket-papel">
+                <div style="text-align: center; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
+                    <h2 style="margin: 0;">SISTECH S.A.</h2>
+                    <p style="margin: 5px 0 0 0; font-size: 12px;">Orden de Salida de Almacén</p>
+                </div>
+                
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    <p><strong>Folio:</strong> <span id="tk-folio"></span></p>
+                    <p><strong>Fecha:</strong> <span id="tk-fecha"></span></p>
+                    <p><strong>Solicitante:</strong> <span id="tk-cliente"></span></p>
+                    <p><strong>Atendió:</strong> <span id="tk-vendedor"></span></p>
+                </div>
+
+                <table style="width: 100%; font-size: 12px; text-align: left; border-bottom: 1px dashed black; padding-bottom: 10px; margin-bottom: 10px;">
+                    <thead>
+                        <tr>
+                            <th>Cant</th>
+                            <th>Descripción</th>
+                            <th style="text-align: right;">Importe</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tk-detalles">
+                        </tbody>
+                </table>
+
+                <div style="text-align: right; font-size: 16px; font-weight: bold;">
+                    Total: <span id="tk-total"></span>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px; font-size: 12px;">
+                    <p>_________________________</p>
+                    <p>Firma de Recibido</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="sidebar">
+        <div class="sidebar-logo">SisTech</div>
+        <button id="btn-Inicio" class="menu-btn activo" onclick="cambiarVista('Inicio')">📊 Dashboard</button>
+        <button id="btn-Ventas" class="menu-btn" onclick="cambiarVista('Ventas')">💰 Ventas</button>
+        <button id="btn-Inventario" class="menu-btn" onclick="cambiarVista('Inventario')">📦 Inventario</button>
+        <button id="btn-Productos" class="menu-btn" onclick="cambiarVista('Productos')">💻 Productos</button>
+        <button id="btn-Usuarios" class="menu-btn" onclick="cambiarVista('Usuarios')">👥 Usuarios</button>
+        <button id="btn-Configuracion" class="menu-btn" onclick="cambiarVista('Configuracion')">⚙️ Configuración</button>
+        <button class="menu-btn btn-cerrar" onclick="cerrarAplicacion()">🚪 Cerrar Sesión</button>
+    </nav>
+
+    <main class="main-content">
+        <header class="header">
+            <h1 id="titulo-pantalla">Panel Principal</h1>
+            <div class="user-info">
+                <span id="fecha-actual"></span> | Hola, <strong id="nombre-usuario">Cargando...</strong>
+            </div>
+        </header>
+
+        <section class="content-area">
+            
+            <div id="vista-Inicio" class="vista-modulo activa">
+                <div class="tarjeta-blanca" style="text-align: left; padding: 20px;">
+                    <h2>Resumen General</h2>
+                    <p style="color: #7f8c8d; margin-top: 5px;">Visualización del rendimiento del sistema.</p>
+                </div>
+
+                <div class="grid-graficas">
+                    <div class="tarjeta-grafica">
+                        <h3>Ventas de la Semana (MXN)</h3>
+                        <canvas id="graficaVentas"></canvas>
+                    </div>
+                    <div class="tarjeta-grafica">
+                        <h3>Equipos con Menor Stock (Uds)</h3>
+                        <div><canvas id="graficaStock"></canvas></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="vista-Ventas" class="vista-modulo">
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    
+                    <div class="tarjeta-blanca" style="flex: 1; text-align: left;">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px;">Terminal de Salida</h2>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Seleccionar Equipo</label>
+                            <select id="venta-producto" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                                <option value="">Cargando catálogo...</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <div style="flex: 1;">
+                                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Cantidad</label>
+                                <input type="number" id="venta-cantidad" value="1" min="1" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                            </div>
+                            <div style="flex: 1; display: flex; align-items: flex-end;">
+                                <button onclick="agregarAlCarrito()" style="width: 100%; background-color: #3498db; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                                    ➕ Agregar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tarjeta-blanca" style="flex: 1.5; text-align: left; background-color: #fdfdfd; border: 1px solid #ecf0f1;">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px;">Detalle de la Transacción</h2>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Nombre del Cliente / Solicitante</label>
+                            <input type="text" id="venta-cliente" placeholder="Ej. Línea de Producción 4" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        </div>
+
+                        <div style="min-height: 200px; max-height: 250px; overflow-y: auto; border: 1px solid #ecf0f1; border-radius: 5px; margin-bottom: 15px;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead style="background-color: #34495e; color: white; position: sticky; top: 0;">
+                                    <tr>
+                                        <th style="padding: 10px;">Cant.</th>
+                                        <th style="padding: 10px;">Descripción</th>
+                                        <th style="padding: 10px;">Importe</th>
+                                        <th style="padding: 10px;">Acción</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-carrito">
+                                    </tbody>
+                            </table>
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 2px dashed #bdc3c7;">
+                            <div>
+                                <span style="font-size: 16px; color: #7f8c8d;">Total a Pagar:</span>
+                                <div id="venta-total" style="font-size: 28px; font-weight: bold; color: #e74c3c;">$0.00</div>
+                            </div>
+                            <button onclick="procesarCobro()" style="background-color: #27ae60; color: white; border: none; padding: 15px 30px; border-radius: 5px; font-weight: bold; font-size: 18px; cursor: pointer;">
+                                ✅ Procesar Salida
+                            </button>
+                        </div>
+                    </div>
+                    
+                </div>    
+            </div>
+
+            <div id="vista-Inventario" class="vista-modulo">
+                <div style="display: flex; gap: 20px; align-items: flex-start;">
+                    
+                    <div class="tarjeta-blanca" style="flex: 1; text-align: left;">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px;">Ajuste de Inventario</h2>
+                        <p style="color: #7f8c8d; margin-bottom: 20px; font-size: 14px;">
+                            Registre entradas por recepción de proveedores o salidas por merma/daño.
+                        </p>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Código del Equipo</label>
+                            <input type="text" id="inv-codigo" placeholder="Ej. SEN-04" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                            <div style="flex: 1;">
+                                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Tipo de Movimiento</label>
+                                <select id="inv-tipo" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                                    <option value="ENTRADA">🟢 ENTRADA (Suma stock)</option>
+                                    <option value="SALIDA">🔴 SALIDA (Resta stock)</option>
+                                </select>
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Cantidad</label>
+                                <input type="number" id="inv-cantidad" value="1" min="1" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Justificación / Observaciones</label>
+                            <input type="text" id="inv-justificacion" placeholder="Ej. Material dañado en Línea 2, Recepción Lote A4" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        </div>
+
+                        <button onclick="procesarMovimientoInventario()" style="width: 100%; background-color: #8e44ad; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px;">
+                            📝 Registrar Movimiento
+                        </button>
+                    </div>
+
+                    <div class="tarjeta-blanca" style="flex: 1.5; text-align: left; overflow: hidden; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="color: #2c3e50;">Bitácora Reciente</h2>
+                            <span style="background-color: #f39c12; color: white; padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold;">
+                                Auditoría Activa
+                            </span>
+                        </div>
+                        
+                        <div style="overflow-y: auto; flex: 1; max-height: 350px;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+                                <thead style="background-color: #34495e; color: white; position: sticky; top: 0;">
+                                    <tr>
+                                        <th style="padding: 10px;">Código</th>
+                                        <th style="padding: 10px;">Tipo</th>
+                                        <th style="padding: 10px;">Cant.</th>
+                                        <th style="padding: 10px;">Justificación</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-bitacora">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; padding: 20px; color: #7f8c8d;">
+                                            Los movimientos registrados aparecerán aquí...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+             
+
+            <div id="vista-Productos" class="vista-modulo">
+                
+                <div style="display: flex; gap: 20px;">
+                    
+                    <div class="tarjeta-blanca" style="flex: 1; text-align: left;">
+                        <h2 style="color: #2c3e50; margin-bottom: 20px;">Nuevo Equipo</h2>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Código / SKU</label>
+                            <input type="text" id="prod-codigo" placeholder="Ej. IT-001" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Descripción del Equipo</label>
+                            <input type="text" id="prod-nombre" placeholder="Ej. Lector de Código de Barras" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                        </div>
+
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Categoría</label>
+                            <select id="prod-categoria" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                                <option value="Equipo de Cómputo">Equipo de Cómputo</option>
+                                <option value="Automatización">Automatización</option>
+                                <option value="Displays">Displays / Monitores</option>
+                                <option value="Redes">Redes e Infraestructura</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <div style="flex: 1;">
+                                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Stock Inicial</label>
+                                <input type="number" id="prod-stock" value="0" min="0" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Precio (MXN)</label>
+                                <input type="number" id="prod-precio" value="0.00" min="0" step="0.01" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                            </div>
+                        </div>
+
+                        <button onclick="registrarEquipo()" style="width: 100%; background-color: #27ae60; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer;">
+                            💾 Guardar Equipo
+                        </button>
+                    </div>
+
+                    <div class="tarjeta-blanca" style="flex: 2; text-align: left; overflow: hidden; display: flex; flex-direction: column;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                            <h2 style="color: #2c3e50;">Catálogo de Equipos</h2>
+                            <button onclick="cargarTablaProductos()" style="background-color: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">
+                                🔄 Actualizar
+                            </button>
+                        </div>
+                        
+                        <div style="overflow-y: auto; flex: 1;">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                <thead style="background-color: #34495e; color: white; position: sticky; top: 0;">
+                                    <tr>
+                                        <th style="padding: 12px;">Código</th>
+                                        <th style="padding: 12px;">Descripción</th>
+                                        <th style="padding: 12px;">Categoría</th>
+                                        <th style="padding: 12px;">Stock</th>
+                                        <th style="padding: 12px;">Precio</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabla-productos-body">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+            
+            
+            <div id="vista-Usuarios" class="vista-modulo">
+                <div class="tarjeta-blanca"><h2>Administración de Usuarios</h2>
+            
+                <div class="tarjeta-blanca" style="max-width: 600px; margin: 0 auto; text-align: left;">
+                    <h2 style="color: #2c3e50; margin-bottom: 20px;">Actualizar Perfil de Usuario</h2>
+                    <p style="color: #7f8c8d; margin-bottom: 20px; font-size: 14px;">
+                        Ingrese el Nickname del usuario que desea modificar y los nuevos datos a guardar.
+                    </p>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Nickname (Usuario actual)</label>
+                        <input type="text" id="upd-nickname" placeholder="Ej. jperez" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px; background-color: #f8f9fa;">
+                    </div>
+
+                    <hr style="border: 0; border-top: 1px solid #ecf0f1; margin: 20px 0;">
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Nuevo Nombre(s)</label>
+                        <input type="text" id="upd-nombre" placeholder="Ingrese el nuevo nombre" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                    </div>
+
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; font-weight: bold; margin-bottom: 5px; color: #34495e;">Nuevos Apellidos</label>
+                        <input type="text" id="upd-apellidos" placeholder="Ingrese los nuevos apellidos" style="width: 100%; padding: 10px; border: 1px solid #bdc3c7; border-radius: 5px;">
+                    </div>
+
+                    <button onclick="actualizarUsuario()" style="width: 100%; background-color: #f39c12; color: white; border: none; padding: 12px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 16px;">
+                        ✏️ Actualizar Datos
+                    </button>
+                    
+                    <div id="msg-actualizacion" style="margin-top: 15px; text-align: center; font-weight: bold; display: none; padding: 10px; border-radius: 5px;"></div>
+                </div>
+            </div>
+            </div>
+            
+            
+            
+            
+            
+            
+            <div id="vista-Configuracion" class="vista-modulo"><div class="tarjeta-blanca"><h2>Configuración del Sistema</h2></div></div>
+
+        </section>
+    </main>
+
+    <script>
+        // 1. EVENTO QUE SE EJECUTA AL CARGAR LA PÁGINA
+        function iniciarDashboardDesdeJava() {
+            // Poner la fecha actual
+            const opcionesFecha = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('fecha-actual').innerText = new Date().toLocaleDateString('es-MX', opcionesFecha);
+
+            // Comunicarse con Java para obtener datos, ahora con la seguridad de que existe
+            if (window.javaBackend) {
+                // Obtener nombre del usuario guardado en el backend
+                document.getElementById('nombre-usuario').innerText = window.javaBackend.getNombreUsuario();
+                
+                // Dibujar gráficas
+                inicializarGraficaVentas();
+                inicializarGraficaStock();
+            } else {
+                document.getElementById('nombre-usuario').innerText = "Error de conexión";
+            }
+        }
+        // 2. LÓGICA DE NAVEGACIÓN (SPA)
+        function cambiarVista(nombreVista) {
+            // Cambiar el título
+            document.getElementById('titulo-pantalla').innerText = nombreVista === 'Inicio' ? 'Panel Principal' : 'Módulo: ' + nombreVista;
+
+            // Ocultar todas las vistas
+            let vistas = document.getElementsByClassName('vista-modulo');
+            for(let i = 0; i < vistas.length; i++) {
+                vistas[i].classList.remove('activa');
+            }
+
+            // Mostrar la vista seleccionada
+            document.getElementById('vista-' + nombreVista).classList.add('activa');
+
+            // Actualizar estilo del menú lateral
+            let botones = document.getElementsByClassName('menu-btn');
+            for(let i = 0; i < botones.length; i++) {
+                botones[i].classList.remove('activo');
+            }
+            document.getElementById('btn-' + nombreVista).classList.add('activo');
+            
+            // Si quieres informar a Java sobre el cambio de módulo, descomenta esta línea:
+            // if(window.javaBackend) window.javaBackend.abrirModulo(nombreVista);
+            
+            if (nombreVista === 'Productos') {
+                cargarTablaProductos();
+                } else if (nombreVista === 'Ventas') {
+                // Al entrar a la terminal de salida, se descarga el catálogo actualizado
+                cargarCatalogoParaVentas(); 
+            }
+        }
+
+        // 3. FUNCIONES PARA DIBUJAR GRÁFICAS (Chart.js)
+        // 3. FUNCIONES PARA DIBUJAR GRÁFICAS (Optimizadas para JavaFX)
+        function inicializarGraficaVentas() {
+            // Le damos 200 milisegundos a JavaFX para "respirar" antes de dibujar
+            setTimeout(() => {
+                try {
+                    let datosStr = window.javaBackend.getDatosVentasJSON();
+                    let datos = JSON.parse(datosStr);
+
+                    new Chart(document.getElementById('graficaVentas'), {
+                        type: 'line',
+                        data: {
+                            labels: datos.etiquetas,
+                            datasets: [{
+                                label: 'Ingresos',
+                                data: datos.valores,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4
+                            }]
+                        },
+                        options: { 
+                            responsive: true, maintainAspectRatio: false, animation: false, 
+                            plugins: { legend: { display: false } } 
+                        }
+                    });
+                } catch (error) {
+                    // Si algo falla, ahora nos saldrá una alerta con el motivo exacto
+                    alert("Error en Ventas: " + error.message);
+                }
+            }, 200);
+        }
+
+        function inicializarGraficaStock() {
+            setTimeout(() => {
+                try {
+                    let datosStr = window.javaBackend.getDatosStockJSON();
+                    let datos = JSON.parse(datosStr);
+
+                    new Chart(document.getElementById('graficaStock'), {
+                        type: 'bar',
+                        data: {
+                            labels: datos.etiquetas,
+                            datasets: [{
+                                label: 'Unidades Disponibles',
+                                data: datos.valores,
+                                backgroundColor: '#e74c3c',
+                                borderRadius: 4
+                            }]
+                        },
+                        options: { 
+                            responsive: true, maintainAspectRatio: false, animation: false, 
+                            plugins: { legend: { display: false } },
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+                } catch (error) {
+                    alert("Error en Stock: " + error.message);
+                }
+            }, 200);
+        }
+        
+        // ==========================================
+        // LÓGICA DEL MÓDULO DE PRODUCTOS
+        // ==========================================
+
+        function registrarEquipo() {
+            // 1. Extraer datos del formulario
+            let codigo = document.getElementById("prod-codigo").value;
+            let nombre = document.getElementById("prod-nombre").value;
+            let categoria = document.getElementById("prod-categoria").value;
+            let stock = parseInt(document.getElementById("prod-stock").value);
+            let precio = parseFloat(document.getElementById("prod-precio").value);
+
+            // Validar que no falten datos clave
+            if(codigo.trim() === "" || nombre.trim() === "") {
+                alert("Por favor, ingrese el Código y la Descripción del equipo.");
+                return;
+            }
+
+            // 2. Enviar a Java
+            if (window.javaBackend) {
+                let exito = window.javaBackend.guardarNuevoProducto(codigo, nombre, categoria, stock, precio);
+                
+                if(exito) {
+                    alert("Equipo registrado correctamente.");
+                    // Limpiar el formulario
+                    document.getElementById("prod-codigo").value = "";
+                    document.getElementById("prod-nombre").value = "";
+                    document.getElementById("prod-stock").value = "0";
+                    document.getElementById("prod-precio").value = "0.00";
+                    
+                    // 3. Recargar la tabla automáticamente para ver el nuevo producto
+                    cargarTablaProductos();
+                } else {
+                    alert("Error al registrar. Verifique que el código no esté duplicado.");
+                }
+            }
+        }
+
+        function cargarTablaProductos() {
+            if (window.javaBackend) {
+                let jsonStr = window.javaBackend.obtenerListaProductosJSON();
+                let productos = JSON.parse(jsonStr);
+                
+                let tbody = document.getElementById("tabla-productos-body");
+                tbody.innerHTML = ""; // Limpiar tabla actual
+
+                productos.forEach(prod => {
+                    // Dar formato de moneda al precio
+                    let precioFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(prod.precio);
+                    
+                    // Colorear el stock si está bajo (menos de 5 unidades)
+                    let stockColor = prod.stock < 5 ? "color: #e74c3c; font-weight: bold;" : "color: #27ae60; font-weight: bold;";
+
+                    let fila = `
+                        <tr style="border-bottom: 1px solid #ecf0f1;">
+                            <td style="padding: 12px; font-weight: bold; color: #7f8c8d;">${prod.codigo}</td>
+                            <td style="padding: 12px;">${prod.nombre}</td>
+                            <td style="padding: 12px;">${prod.categoria}</td>
+                            <td style="padding: 12px; ${stockColor}">${prod.stock} uds</td>
+                            <td style="padding: 12px;">${precioFmt}</td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += fila;
+                });
+            }
+        }
+        
+        // ==========================================
+        // LÓGICA DEL MÓDULO DE USUARIOS
+        // ==========================================
+
+        function actualizarUsuario() {
+            // 1. Extraer los datos de las cajas de texto
+            let nickname = document.getElementById("upd-nickname").value;
+            let nuevoNombre = document.getElementById("upd-nombre").value;
+            let nuevosApellidos = document.getElementById("upd-apellidos").value;
+            let divMsg = document.getElementById("msg-actualizacion");
+
+            // 2. Validar que no envíen campos vacíos
+            if (nickname.trim() === "" || nuevoNombre.trim() === "" || nuevosApellidos.trim() === "") {
+                divMsg.innerText = "Por favor, complete todos los campos.";
+                divMsg.style.backgroundColor = "#f8d7da";
+                divMsg.style.color = "#721c24";
+                divMsg.style.display = "block";
+                return;
+            }
+
+            // 3. Comunicarse con el puente de Java
+            if (window.javaBackend) {
+                let exito = window.javaBackend.actualizarMiPerfil(nickname, nuevoNombre, nuevosApellidos);
+                
+                if (exito) {
+                    // Mostrar mensaje de éxito
+                    divMsg.innerText = "¡Datos actualizados correctamente!";
+                    divMsg.style.backgroundColor = "#d4edda";
+                    divMsg.style.color = "#155724";
+                    divMsg.style.display = "block";
+                    
+                    // Limpiar las cajas de texto
+                    document.getElementById("upd-nickname").value = "";
+                    document.getElementById("upd-nombre").value = "";
+                    document.getElementById("upd-apellidos").value = "";
+                } else {
+                    // Mostrar mensaje de error (ej. el nickname no existe)
+                    divMsg.innerText = "Error: No se encontró el usuario o no se pudo actualizar.";
+                    divMsg.style.backgroundColor = "#f8d7da";
+                    divMsg.style.color = "#721c24";
+                    divMsg.style.display = "block";
+                }
+            }
+        }
+        
+        // ==========================================
+        // LÓGICA DEL CARRITO DE VENTAS
+        // ==========================================
+        
+        let carritoTemporal = []; // Arreglo en memoria para guardar los equipos
+        let totalAcumulado = 0.0;
+
+        function agregarAlCarrito() {
+            // 1. Extraer los datos del select (Vienen unidos por el caracter '|')
+            let selectProducto = document.getElementById("venta-producto").value;
+            
+            if (selectProducto === "") {
+                alert("Por favor, seleccione un equipo válido del catálogo.");
+                return;
+            }
+            
+            let datos = selectProducto.split('|'); 
+            
+            let codigo = datos[0];
+            let nombre = datos[1];
+            let precioUnitario = parseFloat(datos[2]);
+            let cantidad = parseInt(document.getElementById("venta-cantidad").value);
+
+            if (cantidad <= 0 || isNaN(cantidad)) {
+                alert("Ingrese una cantidad válida.");
+                return;
+            }
+
+            // 2. Verificar si el producto ya está en el carrito para sumar la cantidad
+            let productoExistente = carritoTemporal.find(item => item.codigo === codigo);
+            if (productoExistente) {
+                productoExistente.cantidad += cantidad;
+            } else {
+                // Si no existe, agregamos un nuevo objeto al arreglo
+                carritoTemporal.push({
+                    codigo: codigo,
+                    nombre: nombre,
+                    cantidad: cantidad,
+                    precio: precioUnitario
+                });
+            }
+
+            // 3. Actualizar la interfaz
+            document.getElementById("venta-cantidad").value = 1; // Reiniciar input
+            actualizarTablaCarrito();
+        }
+
+        function removerDelCarrito(indice) {
+            // Eliminar elemento del arreglo basado en su posición
+            carritoTemporal.splice(indice, 1);
+            actualizarTablaCarrito();
+        }
+
+        function actualizarTablaCarrito() {
+            let tbody = document.getElementById("tabla-carrito");
+            tbody.innerHTML = "";
+            totalAcumulado = 0.0;
+
+            // Recorrer el arreglo para dibujar las filas
+            carritoTemporal.forEach((item, index) => {
+                let importe = item.cantidad * item.precio;
+                totalAcumulado += importe;
+
+                let precioFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(importe);
+
+                let fila = `
+                    <tr style="border-bottom: 1px solid #ecf0f1;">
+                        <td style="padding: 10px; font-weight: bold;">${item.cantidad}</td>
+                        <td style="padding: 10px;">
+                            ${item.nombre} <br>
+                            <small style="color: #7f8c8d;">SKU: ${item.codigo}</small>
+                        </td>
+                        <td style="padding: 10px; font-weight: bold;">${precioFmt}</td>
+                        <td style="padding: 10px;">
+                            <button onclick="removerDelCarrito(${index})" style="background-color: transparent; color: #e74c3c; border: none; cursor: pointer; font-size: 16px;">
+                                🗑️
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += fila;
+            });
+
+            // Actualizar el texto del Total Grande
+            document.getElementById("venta-total").innerText = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(totalAcumulado);
+        }
+
+        function procesarCobro() {
+            if (carritoTemporal.length === 0) {
+                alert("El carrito está vacío."); return;
+            }
+
+            let cliente = document.getElementById("venta-cliente").value;
+            if (cliente.trim() === "") {
+                alert("Por favor, ingrese el nombre del solicitante."); return;
+            }
+
+            let carritoJSON = JSON.stringify(carritoTemporal);
+
+            if (window.javaBackend) {
+                // 1. Recibimos el ID de la venta (Folio) en lugar de true/false
+                let folioGenerado = window.javaBackend.registrarVentaDesdeWeb(cliente, totalAcumulado, carritoJSON);
+                
+                if (folioGenerado > 0) {
+                    // 2. Llenamos el Ticket con los datos de la venta recién hecha
+                    generarYMostrarTicket(folioGenerado, cliente, totalAcumulado);
+                    
+                    // 3. Limpiamos la pantalla de ventas por detrás
+                    carritoTemporal = [];
+                    actualizarTablaCarrito();
+                    document.getElementById("venta-cliente").value = "";
+                    cargarCatalogoParaVentas(); // Recargamos para actualizar el stock visual
+                } else {
+                    alert("Ocurrió un error al procesar la salida en la base de datos.");
+                }
+            }
+        }
+
+        // --- FUNCIONES NUEVAS PARA EL TICKET ---
+        
+        function generarYMostrarTicket(folio, cliente, total) {
+            // Llenar cabecera
+            document.getElementById("tk-folio").innerText = String(folio).padStart(6, '0'); // Ej. 000015
+            document.getElementById("tk-fecha").innerText = new Date().toLocaleString('es-MX');
+            document.getElementById("tk-cliente").innerText = cliente;
+            
+            // Si tienes el nombre del usuario guardado, puedes ponerlo aquí
+            document.getElementById("tk-vendedor").innerText = document.getElementById("nombre-usuario").innerText;
+
+            // Llenar detalles de productos iterando el carrito
+            let tbodyTicket = document.getElementById("tk-detalles");
+            tbodyTicket.innerHTML = "";
+            
+            carritoTemporal.forEach(item => {
+                let importe = item.cantidad * item.precio;
+                let precioFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(importe);
+                
+                let fila = `
+                    <tr>
+                        <td style="vertical-align: top;">${item.cantidad}</td>
+                        <td style="padding-right: 5px;">${item.nombre} <br> <span style="font-size: 10px;">${item.codigo}</span></td>
+                        <td style="text-align: right; vertical-align: top;">${precioFmt}</td>
+                    </tr>
+                `;
+                tbodyTicket.innerHTML += fila;
+            });
+
+            // Llenar total
+            document.getElementById("tk-total").innerText = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(total);
+
+            // Mostrar la ventana flotante
+            document.getElementById("modal-ticket").style.display = "flex";
+        }
+
+        function imprimirTicketFisico() {
+            if (window.javaBackend) {
+                // Le damos la orden al código en Java para que levante la ventana de Windows
+                window.javaBackend.imprimirPantalla();
+            } else {
+                // Fallback de seguridad por si en el futuro decides correr esto en un navegador web puro
+                window.print(); 
+            }
+        }
+
+        function cerrarTicket() {
+            // Oculta el modal del ticket
+            document.getElementById("modal-ticket").style.display = "none";
+        }
+        
+        // ==========================================
+        // LÓGICA DEL MÓDULO DE INVENTARIO
+        // ==========================================
+
+        function procesarMovimientoInventario() {
+            // 1. Extraer los datos de la interfaz
+            let codigo = document.getElementById("inv-codigo").value;
+            let tipo = document.getElementById("inv-tipo").value;
+            let cantidad = parseInt(document.getElementById("inv-cantidad").value);
+            let justificacion = document.getElementById("inv-justificacion").value;
+
+            // Validaciones básicas
+            if (codigo.trim() === "" || justificacion.trim() === "") {
+                alert("El código del equipo y la justificación son obligatorios para la auditoría.");
+                return;
+            }
+            if (cantidad <= 0 || isNaN(cantidad)) {
+                alert("Ingrese una cantidad válida mayor a cero.");
+                return;
+            }
+
+            // 2. Comunicarse con el Backend en Java
+            if (window.javaBackend) {
+                // Llamamos a la función que diseñaste en tu MainApp (BackendBridge)
+                let exito = window.javaBackend.ajustarInventario(codigo, tipo, cantidad, justificacion);
+                
+                if (exito) {
+                    alert("Movimiento registrado correctamente en la bitácora.");
+                    
+                    // 3. Agregar la fila a la tabla visualmente para dar retroalimentación inmediata
+                    let colorFila = tipo === 'ENTRADA' ? '#d4edda' : '#f8d7da';
+                    let textColor = tipo === 'ENTRADA' ? '#155724' : '#721c24';
+                    
+                    let nuevaFila = `
+                        <tr style="border-bottom: 1px solid #ecf0f1; background-color: ${colorFila}; color: ${textColor};">
+                            <td style="padding: 10px; font-weight: bold;">${codigo}</td>
+                            <td style="padding: 10px; font-weight: bold;">${tipo}</td>
+                            <td style="padding: 10px;">${cantidad}</td>
+                            <td style="padding: 10px; font-style: italic;">${justificacion}</td>
+                        </tr>
+                    `;
+                    
+                    // Quitar el mensaje de "vacío" si existe
+                    let tbody = document.getElementById("tabla-bitacora");
+                    if(tbody.innerText.includes("Los movimientos registrados")) {
+                        tbody.innerHTML = "";
+                    }
+                    
+                    // Agregar al inicio de la tabla
+                    tbody.innerHTML = nuevaFila + tbody.innerHTML;
+
+                    // Limpiar el formulario para el siguiente movimiento
+                    document.getElementById("inv-codigo").value = "";
+                    document.getElementById("inv-cantidad").value = "1";
+                    document.getElementById("inv-justificacion").value = "";
+                } else {
+                    alert("Error. Verifique que el código del equipo exista en el catálogo de productos.");
+                }
+            } else {
+                console.error("Conexión con el servidor Java no disponible.");
+            }
+        }
+        
+        function cargarCatalogoParaVentas() {
+            if (window.javaBackend) {
+                // 1. Reutilizamos el método que ya trae todos los productos de MySQL
+                let jsonStr = window.javaBackend.obtenerListaProductosJSON();
+                let productos = JSON.parse(jsonStr);
+
+                // 2. Apuntamos al menú desplegable en el HTML
+                let selectVenta = document.getElementById("venta-producto");
+                selectVenta.innerHTML = ""; // Limpiamos cualquier dato anterior
+
+                // 3. Creamos una opción por defecto
+                let opcionDefault = document.createElement("option");
+                opcionDefault.text = "-- Seleccione un equipo para salida --";
+                opcionDefault.value = "";
+                selectVenta.add(opcionDefault);
+
+                // 4. Recorremos el inventario y agregamos solo lo que tiene existencias
+                productos.forEach(prod => {
+                    if(prod.stock > 0) {
+                        let opcion = document.createElement("option");
+                        
+                        // Guardamos los datos en el mismo formato que ya usa tu carrito: "codigo|nombre|precio"
+                        opcion.value = `${prod.codigo}|${prod.nombre}|${prod.precio}`;
+                        
+                        // Le damos un formato visual muy claro para el usuario
+                        let precioFmt = new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(prod.precio);
+                        opcion.text = `${prod.codigo} - ${prod.nombre} (Disponibles: ${prod.stock} uds | ${precioFmt})`;
+                        
+                        selectVenta.add(opcion);
+                    }
+                });
+            }
+        }
+
+        function cerrarAplicacion() {
+            if(confirm("¿Estás seguro de que deseas cerrar sesión?")) {
+                if(window.javaBackend) { window.javaBackend.cargarPantallaLogin(); }
+            }
+        }
+    </script>
+</body>
+</html>

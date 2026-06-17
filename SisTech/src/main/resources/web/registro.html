@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registro - SisTech</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #e9ecef; }
+        .registro-card {
+            background: white; padding: 40px; border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 450px;
+        }
+        .registro-card h2 { color: #2c3e50; margin-bottom: 25px; text-align: center; }
+        
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-weight: bold; color: #34495e; margin-bottom: 5px; font-size: 14px; }
+        .input-group input {
+            width: 100%; padding: 10px; border: 1px solid #ced4da; border-radius: 6px; font-size: 15px; outline: none; transition: border-color 0.3s;
+        }
+        .input-group input:focus { border-color: #27ae60; }
+        
+        .btn-registro {
+            width: 100%; background-color: #27ae60; color: white; border: none;
+            padding: 12px; border-radius: 6px; font-size: 16px; font-weight: bold;
+            cursor: pointer; margin-top: 15px; transition: background 0.3s;
+        }
+        .btn-registro:hover { background-color: #2ecc71; }
+        
+        .btn-volver {
+            width: 100%; background-color: transparent; color: #7f8c8d; border: 1px solid #bdc3c7;
+            padding: 10px; border-radius: 6px; cursor: pointer; margin-top: 10px; font-size: 15px; font-weight: bold; transition: all 0.3s;
+        }
+        .btn-volver:hover { background-color: #f8f9fa; color: #2c3e50; }
+
+        .mensaje { text-align: center; margin-top: 15px; font-size: 14px; display: none; padding: 10px; border-radius: 6px; }
+        .msg-exito { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .msg-error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <div class="registro-card">
+        <h2>Crear Nuevo Usuario</h2>
+        
+        <div class="input-group">
+            <label>Nombre(s)</label>
+            <input type="text" id="txtNombre" placeholder="Ej. Juan Carlos">
+        </div>
+        <div class="input-group">
+            <label>Apellidos</label>
+            <input type="text" id="txtApellidos" placeholder="Ej. Pérez Gómez">
+        </div>
+        <div class="input-group">
+            <label>Nombre de Usuario (Nickname)</label>
+            <input type="text" id="txtNickname" placeholder="Ej. jperez">
+        </div>
+        <div class="input-group">
+            <label>Contraseña</label>
+            <input type="password" id="txtPassword" placeholder="Crea una contraseña segura">
+        </div>
+
+        <button class="btn-registro" onclick="procesarRegistro()">Registrar Usuario</button>
+        <button class="btn-volver" onclick="volverAlLogin()">Volver al Login</button>
+        
+        <div class="mensaje" id="divMensaje"></div>
+    </div>
+
+    <script>
+        function procesarRegistro() {
+            let nombre = document.getElementById("txtNombre").value;
+            let apellidos = document.getElementById("txtApellidos").value;
+            let nickname = document.getElementById("txtNickname").value;
+            let password = document.getElementById("txtPassword").value;
+            let divMsg = document.getElementById("divMensaje");
+
+            if(nombre.trim() === "" || apellidos.trim() === "" || nickname.trim() === "" || password.trim() === "") {
+                divMsg.className = "mensaje msg-error";
+                divMsg.innerText = "Todos los campos son obligatorios.";
+                divMsg.style.display = "block";
+                return;
+            }
+
+            if (window.javaBackend) {
+                // Enviamos los datos. Java aplicará el MD5 a la contraseña internamente.
+                let exito = window.javaBackend.registrarUsuario(nombre, apellidos, nickname, password);
+                
+                if (exito) {
+                    divMsg.className = "mensaje msg-exito";
+                    divMsg.innerText = "Usuario registrado correctamente.";
+                    divMsg.style.display = "block";
+                    
+                    document.getElementById("txtNombre").value = "";
+                    document.getElementById("txtApellidos").value = "";
+                    document.getElementById("txtNickname").value = "";
+                    document.getElementById("txtPassword").value = "";
+                } else {
+                    divMsg.className = "mensaje msg-error";
+                    divMsg.innerText = "Error al registrar. El usuario tal vez ya existe.";
+                    divMsg.style.display = "block";
+                }
+            }
+        }
+
+        function volverAlLogin() {
+            if (window.javaBackend) {
+                window.javaBackend.cargarPantallaLogin();
+            }
+        }
+    </script>
+</body>
+</html>
